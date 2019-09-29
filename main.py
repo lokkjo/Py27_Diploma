@@ -1,11 +1,13 @@
 import requests
 import time
 import json
+import sys
 
 class VkUser:
-    def __init__(self, data=None):
+    def __init__(self, data=None, n=0):
         self.access_token = input('Введите токен OAuth: \n')
         self.data = data
+        self.n = n
 
     def get_user_id(self):
         if self.data is None:
@@ -21,8 +23,10 @@ class VkUser:
             params=u_init_params
         )
         user_dict = u_init_resp.json()
+        if user_dict['response'][0].get('deactivated') == 'deleted':
+            print('\nСтраница пользователя удалена')
+            sys.exit()
         user_id = (user_dict['response'][0]['id'])
-        user_name = (user_dict['response'][0]['screen_name'])
         return user_id
 
     def set_params(self):
@@ -80,11 +84,11 @@ class VkUser:
                 time.sleep(0.3)
         return groups_membership
 
-    def sort_groups(self, n=0):
+    def sort_groups(self):
         groups_dict = self.get_group_membership()
         sorted_groups = {}
         for key, group in groups_dict.items():
-            if len(group) <= n:
+            if len(group) <= self.n:
                 sorted_groups[key] = group
         return sorted_groups
 
@@ -128,4 +132,3 @@ class VkUser:
 if __name__ == '__main__':
     eshmargunov = VkUser('eshmargunov')
     eshmargunov.write_json_output()
-
