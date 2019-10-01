@@ -3,6 +3,7 @@ import time
 import json
 import sys
 
+
 class VkUser:
     def __init__(self, data=None, n=0):
         self.access_token = input('Введите токен OAuth: \n')
@@ -12,6 +13,7 @@ class VkUser:
     def get_user_id(self):
         if self.data is None:
             self.data = input('Введите UserID: \n')
+        time.sleep(0.5)
         u_init_params = {
             'user_ids': str(self.data),
             'fields': 'screen_name,user_id',
@@ -34,10 +36,11 @@ class VkUser:
             'access_token': self.access_token,
             'user_id': self.get_user_id(),
             'v': 5.101
-            }
+        }
         return params
 
     def get_friends_list(self):
+        time.sleep(0.5)
         friends_response = requests.get(
             'https://api.vk.com/method/friends.get',
             params=self.set_params()
@@ -47,6 +50,7 @@ class VkUser:
         return friends_list
 
     def get_groups_list(self):
+        time.sleep(0.5)
         groups_response = requests.get(
             'https://api.vk.com/method/groups.get',
             params=self.set_params()
@@ -56,47 +60,56 @@ class VkUser:
         return groups_list
 
     def get_group_membership(self):
-        friends_list = self.get_friends_list()
         groups_list = self.get_groups_list()
-        groups_membership = {}
+        group_membership = {}
         for group in groups_list:
-            groups_membership[group] = []
-            for friend in friends_list:
-                print(
-                    f'\rОбрабатывается {groups_list.index(group) + 1} '
-                    f'группа из {len(groups_list)}; '
-                    f'{friends_list.index(friend) + 1} друг из '
-                    f'{len(friends_list)}', end="", flush=True)
-                g_mms_params = {
-                    'group_id': f'{group}',
-                    'user_id': friend,
-                    'access_token': self.access_token,
-                    'v': 5.101
-                }
-                g_mms_resp = requests.get(
-                    'https://api.vk.com/method/groups.isMember',
-                    params=g_mms_params,
-                )
-                g_mms_media_dict = g_mms_resp.json()
-                mms = g_mms_media_dict['response']
-                if mms == 1:
-                    groups_membership[group].append(friend)
-                time.sleep(0.3)
-        return groups_membership
+            time.sleep(0.5)
+            print(
+                f'\rОбрабатывается {groups_list.index(group) + 1} '
+                f'группа из {len(groups_list)}', end="", flush=True)
+            g_mms_params = {
+                'group_id': f'{group}',
+                'filter': 'friends',
+                # 'user_ids': self.get_friends_list(),
+                'access_token': self.access_token,
+                'v': 5.101
+            }
+            g_mms_resp = requests.get(
+                'https://api.vk.com/method/groups.getMembers',
+                params=g_mms_params,
+            )
+            g_mms_mid_dict = g_mms_resp.json()
+            if g_mms_mid_dict.get('error') is not None:
+                if g_mms_mid_dict.get('error')['error_code'] == 6:
+                    print('Слишком много обращений в секунду!')
+                    sys.exit()
+                print(f'\n{group}: ERROR '
+                      f'{g_mms_mid_dict.get("error")["error_msg"]}'
+                      f'\n')
+                pass
+            elif g_mms_mid_dict.get('response')is not None:
+                group_membership[group] = g_mms_mid_dict['response']
+        return group_membership
 
     def sort_groups(self):
         groups_dict = self.get_group_membership()
-        sorted_groups = {}
+        sorted_groups = []
         for key, group in groups_dict.items():
-            if len(group) <= self.n:
-                sorted_groups[key] = group
+            group_count = group['count']
+            if group_count <= self.n:
+                sorted_groups.append(key)
         return sorted_groups
 
     def get_group_info(self):
         # Получаем из ВК информацию по группам
         groups = self.sort_groups()
         group_media = []
+        print('\n')
         for group in groups:
+            time.sleep(0.5)
+            print(
+                f'\rСбор информации: {groups.index(group) + 1} '
+                f'группа из {len(groups)}', end="", flush=True)
             gi_params = {'group_id': str(group),
                          'fields': ['id', 'name', 'description',
                                     'members_count'],
@@ -107,7 +120,7 @@ class VkUser:
                 params=gi_params
             )
             group_media.append(group_info_resp.json())
-            time.sleep(0.3)
+
         return group_media
 
     def build_json_output(self):
@@ -117,18 +130,21 @@ class VkUser:
             output_group = {
                 'name': str(record['response'][0]['name']),
                 'gid': record['response'][0]['id'],
-                'members_count': record['response'][0]['members_count']
+                'members_count': record['response'][0][
+                    'members_count']
             }
             output_info.append(output_group)
         return output_info
 
     def write_json_output(self):
         output_info = self.build_json_output()
-        with open('groups.json', 'w', encoding='utf-8') as groups_file:
+        with open('groups.json', 'w',
+                  encoding='utf-8') as groups_file:
             json.dump(output_info, groups_file,
                       ensure_ascii=False, indent=2)
+        print('\n \nФайл записан!')
 
 
 if __name__ == '__main__':
-    eshmargunov = VkUser('eshmargunov')
+    eshmargunov = VkUser(3182173)
     eshmargunov.write_json_output()
